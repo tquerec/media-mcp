@@ -117,9 +117,19 @@ The server can be shared with other devices on your home network. It isn't reach
 2. Re-run the Windows service installer. It adds a firewall rule that allows the port only from
    your local subnet, and only on networks marked Private or Domain. Without a token, the server
    refuses to listen beyond localhost.
-3. On the other computer, install [Node.js](https://nodejs.org) and add this to Claude Desktop's
-   `claude_desktop_config.json` (Settings › Developer › Edit Config). Replace `MEDIA-PC` with the
-   server's name or IP address:
+3. On the other computer, connect **Claude Code**. Replace `MEDIA-PC` with the server's name or
+   IP address (the installer prints it) and use the token from `.env`:
+
+   ```sh
+   claude mcp add --transport http media http://MEDIA-PC:8765/mcp \
+     --header "Authorization: Bearer <your MEDIA_MCP_BEARER_TOKEN>"
+   ```
+
+   Add `--scope user` to make it available in every project. Check it with `claude mcp list`.
+
+   **Claude Desktop** can't send headers to an HTTP server directly. Install
+   [Node.js](https://nodejs.org) and bridge with `mcp-remote` in `claude_desktop_config.json`
+   (Settings › Developer › Edit Config):
 
    ```json
    {
@@ -133,9 +143,6 @@ The server can be shared with other devices on your home network. It isn't reach
      }
    }
    ```
-
-   Claude Code on another computer can connect with
-   `claude mcp add --transport http media http://MEDIA-PC:8765/mcp --header "Authorization: Bearer <token>"`.
 
 Traffic on the LAN is plain HTTP. Anyone on your network who can capture traffic could read the
 token, so only do this on a network you trust.
