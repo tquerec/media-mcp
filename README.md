@@ -79,6 +79,35 @@ claude mcp add media -- uv run --directory /path/to/media-mcp media-mcp
 `http://127.0.0.1:8765/mcp`. This has no authentication of its own, so keep it bound to `127.0.0.1`
 or put it behind something that does authenticate.
 
+## Run as a Windows service
+
+To keep the server running in the background on Windows, install it as a service. It then
+serves streamable HTTP on `127.0.0.1` (port `MEDIA_MCP_PORT`, default `8765`) and starts with Windows.
+
+1. Install [uv](https://docs.astral.sh/uv/): `winget install --id astral-sh.uv`
+2. In the repo folder: `copy .env.example .env`, then add your API keys to `.env`.
+3. From an **elevated** PowerShell in the repo folder:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\windows\install-service.ps1
+   ```
+
+The script builds the environment with uv (Python is kept inside the repo in `.python\`), downloads a
+pinned, hash-checked [WinSW](https://github.com/winsw/winsw) into `service\`, registers a `media-mcp`
+service that restarts on failure, restricts `.env` to SYSTEM, Administrators and you, and checks that
+the endpoint answers. Logs are in `service\logs\`. Re-run it after `git pull` to update.
+To remove the service: `scripts\windows\uninstall-service.ps1` (also elevated).
+
+Then connect Claude Code with:
+
+```sh
+claude mcp add --transport http media http://127.0.0.1:8765/mcp
+```
+
+For Claude Desktop, which launches stdio servers, bridge to the HTTP endpoint with
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+`{"command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8765/mcp"]}`.
+
 ## Tools
 
 Call `media_services` to see which groups are active.
