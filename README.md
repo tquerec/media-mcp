@@ -84,15 +84,14 @@ or put it behind something that does authenticate.
 To keep the server running in the background on Windows, install it as a service. It then
 serves streamable HTTP on `127.0.0.1` (port `MEDIA_MCP_PORT`, default `8765`) and starts with Windows.
 
-1. Install [uv](https://docs.astral.sh/uv/): `winget install --id astral-sh.uv`
-2. In the repo folder: `copy .env.example .env`, then add your API keys to `.env`.
-3. From an **elevated** PowerShell in the repo folder:
+1. In the repo folder: `copy .env.example .env`, then add your API keys to `.env`.
+2. From an **elevated** PowerShell in the repo folder:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts\windows\install-service.ps1
    ```
 
-The script builds the environment with uv (Python is kept inside the repo in `.python\`), downloads a
+The script finds [uv](https://docs.astral.sh/uv/) (or downloads a pinned, hash-checked copy into `.tools\`), builds the environment (Python is kept inside the repo in `.python\`), downloads a
 pinned, hash-checked [WinSW](https://github.com/winsw/winsw) into `service\`, registers a `media-mcp`
 service that restarts on failure, restricts `.env` to SYSTEM, Administrators and you, and checks that
 the endpoint answers. Logs are in `service\logs\`. Re-run it after `git pull` to update.

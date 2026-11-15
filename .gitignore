@@ -26,3 +26,4 @@ Thumbs.db
 # Windows service install (WinSW binary, generated XML, logs) and repo-local Python
 service/
 .python/
+.tools/

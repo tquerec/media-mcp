@@ -28,6 +28,10 @@ $WinSWVersion = "v2.12.0"
 $WinSWUrl     = "https://github.com/winsw/winsw/releases/download/$WinSWVersion/WinSW-x64.exe"
 $WinSWSha256  = "05B82D46AD331CC16BDC00DE5C6332C1EF818DF8CEEFCD49C726553209B3A0DA"
 
+$UvVersion = "0.13.8"
+$UvUrl     = "https://github.com/astral-sh/uv/releases/download/$UvVersion/uv-x86_64-pc-windows-msvc.zip"
+$UvSha256  = "529E78A9CEC6CD7E3E014F7ECD8BDA0C113969D4ED0F2EFEEDB85C30943325B8"
+
 $RepoRoot   = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $EnvFile    = Join-Path $RepoRoot ".env"
 $ServiceDir = Join-Path $RepoRoot "service"
@@ -41,10 +45,38 @@ function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 if (-not (Test-Path $EnvFile)) {
     throw "No .env at $EnvFile. Copy .env.example to .env and fill in your API keys first."
 }
+# Find uv: PATH first, then the usual per-user install locations (an elevated
+# shell often lacks the user's PATH), else download a pinned, hash-checked copy
+# into .tools\uv (gitignored).
 $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
 if (-not $uv) {
-    throw "uv was not found. Install it with 'winget install --id astral-sh.uv', open a new terminal, and re-run."
+    $candidates = @(
+        (Join-Path $env:USERPROFILE ".local\bin\uv.exe"),
+        (Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links\uv.exe"),
+        (Join-Path $env:USERPROFILE ".cargo\bin\uv.exe"),
+        (Join-Path $RepoRoot ".tools\uv\uv.exe")
+    )
+    $wingetPkgs = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
+    if (Test-Path $wingetPkgs) {
+        $candidates += Get-ChildItem $wingetPkgs -Directory -Filter "astral-sh.uv*" -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName "uv.exe" }
+    }
+    $uv = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 }
+if (-not $uv) {
+    Step "uv not found; downloading uv $UvVersion into .tools\uv"
+    $uvDir = Join-Path $RepoRoot ".tools\uv"
+    New-Item -ItemType Directory -Force -Path $uvDir | Out-Null
+    $zip = Join-Path $uvDir "uv.zip"
+    Invoke-WebRequest -Uri $UvUrl -OutFile $zip -UseBasicParsing
+    $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+    if ($hash -ne $UvSha256) { Remove-Item $zip -Force; throw "uv download hash mismatch ($hash). Aborting." }
+    Expand-Archive -Path $zip -DestinationPath $uvDir -Force
+    Remove-Item $zip -Force
+    $uv = Join-Path $uvDir "uv.exe"
+    if (-not (Test-Path $uv)) { throw "uv.exe not found after extracting to $uvDir" }
+}
+Step "Using uv at $uv"
 
 # Read host/port from .env so the health check hits the right place.
 $envValues = @{}
@@ -147,5 +179,4 @@ if (-not $ok) { throw "Service started but $url did not answer. Check the logs i
 
 Write-Host ""
 Write-Host "media-mcp is running as the '$ServiceName' service at $url" -ForegroundColor Green
-Write-Host "Add it to Claude Code with:"
-Write-Host "    claude mcp add --transport http media $url"
+Write-Host "Connect a client to $url (see the README's 'Run as a Windows service' section)."
