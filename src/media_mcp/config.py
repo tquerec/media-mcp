@@ -39,6 +39,8 @@ class Config:
     transport: str = "stdio"
     host: str = "127.0.0.1"
     port: int = 8765
+    bearer_token: str | None = field(default=None, repr=False)
+    allow_unauthenticated: bool = False
 
     def enabled(self, name: str) -> bool:
         return name in self.services
@@ -75,4 +77,6 @@ def load_config(env: dict[str, str] | None = None, env_file: str | Path | None =
         transport=(env.get("MEDIA_MCP_TRANSPORT") or "stdio").strip(),
         host=(env.get("MEDIA_MCP_HOST") or "127.0.0.1").strip(),
         port=int(env.get("MEDIA_MCP_PORT") or 8765),
+        bearer_token=(env.get("MEDIA_MCP_BEARER_TOKEN") or "").strip() or None,
+        allow_unauthenticated=_truthy(env.get("MEDIA_MCP_ALLOW_UNAUTHENTICATED")),
     )

@@ -9,6 +9,11 @@ from .server import build_server
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["new-token"]:
+        import secrets
+
+        print(f"MEDIA_MCP_BEARER_TOKEN={secrets.token_urlsafe(32)}")
+        return
     config = load_config()
     enabled = ", ".join(config.services) or "none"
     mode = "read-only" if config.read_only else "read-write"
@@ -17,7 +22,9 @@ def main() -> None:
 
     server = build_server(config)
     if config.transport == "streamable-http":
-        server.run("streamable-http", host=config.host, port=config.port)
+        from .http import serve_http
+
+        serve_http(server, config)
     elif config.transport == "stdio":
         server.run("stdio")
     else:

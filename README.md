@@ -48,7 +48,8 @@ cp .env.example .env
 | `MEDIA_MCP_READ_ONLY` | `false` | `true` hides every tool that changes something |
 | `MEDIA_MCP_TIMEOUT` | `30` | HTTP timeout in seconds |
 | `MEDIA_MCP_TRANSPORT` | `stdio` | `stdio` or `streamable-http` |
-| `MEDIA_MCP_HOST` / `MEDIA_MCP_PORT` | `127.0.0.1` / `8765` | only for `streamable-http` |
+| `MEDIA_MCP_HOST` / `MEDIA_MCP_PORT` | `127.0.0.1` / `8765` | only for `streamable-http`; `0.0.0.0` for LAN access |
+| `MEDIA_MCP_BEARER_TOKEN` | | required for LAN access; `uv run media-mcp new-token` |
 | `MEDIA_MCP_ENV_FILE` | `./.env` | path to an alternative env file |
 
 A service with no API key is simply disabled. Variables already set in the environment win over `.env`.
@@ -78,6 +79,76 @@ claude mcp add media -- uv run --directory /path/to/media-mcp media-mcp
 **Over HTTP**: set `MEDIA_MCP_TRANSPORT=streamable-http` and run `uv run media-mcp`; the endpoint is
 `http://127.0.0.1:8765/mcp`. This has no authentication of its own, so keep it bound to `127.0.0.1`
 or put it behind something that does authenticate.
+
+## Run as a Windows service
+
+To keep the server running in the background on Windows, install it as a service. It then
+serves streamable HTTP on `127.0.0.1` (port `MEDIA_MCP_PORT`, default `8765`) and starts with Windows.
+
+1. In the repo folder: `copy .env.example .env`, then add your API keys to `.env`.
+2. From an **elevated** PowerShell in the repo folder:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\windows\install-service.ps1
+   ```
+
+The script finds [uv](https://docs.astral.sh/uv/) (or downloads a pinned, hash-checked copy into `.tools\`), builds the environment (Python is kept inside the repo in `.python\`), downloads a
+pinned, hash-checked [WinSW](https://github.com/winsw/winsw) into `service\`, registers a `media-mcp`
+service that restarts on failure, restricts `.env` to SYSTEM, Administrators and you, and checks that
+the endpoint answers. Logs are in `service\logs\`. Re-run it after `git pull` to update.
+To remove the service: `scripts\windows\uninstall-service.ps1` (also elevated).
+
+Then connect Claude Code with:
+
+```sh
+claude mcp add --transport http media http://127.0.0.1:8765/mcp
+```
+
+For Claude Desktop, which launches stdio servers, bridge to the HTTP endpoint with
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+`{"command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8765/mcp"]}`.
+
+## Use from other computers on your network
+
+The server can be shared with other devices on your home network. It isn't reachable from the internet.
+
+1. Generate a token: `uv run media-mcp new-token`. Put the printed line in `.env`, along with
+   `MEDIA_MCP_HOST=0.0.0.0`.
+2. Re-run the Windows service installer. It adds a firewall rule that allows the port only from
+   your local subnet, and only on networks marked Private or Domain. Without a token, the server
+   refuses to listen beyond localhost.
+3. On the other computer, connect **Claude Code**. Replace `MEDIA-PC` with the server's name or
+   IP address (the installer prints it) and use the token from `.env`:
+
+   ```sh
+   claude mcp add --transport http media http://MEDIA-PC:8765/mcp \
+     --header "Authorization: Bearer <your MEDIA_MCP_BEARER_TOKEN>"
+   ```
+
+   Add `--scope user` to make it available in every project. Check it with `claude mcp list`.
+
+   **Claude Desktop** can't send headers to an HTTP server directly. Install
+   [Node.js](https://nodejs.org) and bridge with `mcp-remote` in `claude_desktop_config.json`
+   (Settings › Developer › Edit Config):
+
+   ```json
+   {
+     "mcpServers": {
+       "media": {
+         "command": "npx",
+         "args": ["-y", "mcp-remote@0.15.2", "http://MEDIA-PC:8765/mcp",
+                  "--allow-http", "--header", "Authorization:${AUTH_HEADER}"],
+         "env": { "AUTH_HEADER": "Bearer <your MEDIA_MCP_BEARER_TOKEN>" }
+       }
+     }
+   }
+   ```
+
+Traffic on the LAN is plain HTTP. Anyone on your network who can capture traffic could read the
+token, so only do this on a network you trust.
+
+Claude on mobile and claude.ai custom connectors connect from Anthropic's cloud, not from your
+device, so they can't reach a server that is only on your LAN.
 
 ## Tools
 
