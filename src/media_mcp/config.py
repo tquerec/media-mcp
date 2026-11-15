@@ -39,6 +39,10 @@ class Config:
     transport: str = "stdio"
     host: str = "127.0.0.1"
     port: int = 8765
+    # Remote access: when public_url is set, OAuth login is required on the HTTP endpoint.
+    public_url: str | None = None
+    auth_env: dict[str, str] = field(default_factory=dict, repr=False)
+    allow_unauthenticated: bool = False
 
     def enabled(self, name: str) -> bool:
         return name in self.services
@@ -75,4 +79,7 @@ def load_config(env: dict[str, str] | None = None, env_file: str | Path | None =
         transport=(env.get("MEDIA_MCP_TRANSPORT") or "stdio").strip(),
         host=(env.get("MEDIA_MCP_HOST") or "127.0.0.1").strip(),
         port=int(env.get("MEDIA_MCP_PORT") or 8765),
+        public_url=(env.get("MEDIA_MCP_PUBLIC_URL") or "").strip().rstrip("/") or None,
+        auth_env={k: v for k, v in env.items() if k.startswith("MEDIA_MCP_")},
+        allow_unauthenticated=_truthy(env.get("MEDIA_MCP_ALLOW_UNAUTHENTICATED")),
     )

@@ -172,7 +172,11 @@ foreach ($i in 1..20) {
         $r = Invoke-WebRequest -Uri $url -Method Post -Body $body -UseBasicParsing -TimeoutSec 5 `
             -ContentType "application/json" -Headers @{ Accept = "application/json, text/event-stream" }
         if ($r.Content -match '"serverInfo"') { $ok = $true; break }
-    } catch { }
+    } catch {
+        # With remote access (OAuth) enabled, an unauthenticated request gets 401: that means it's up.
+        $resp = $_.Exception.Response
+        if ($resp -and [int]$resp.StatusCode -eq 401) { $ok = $true; break }
+    }
     Start-Sleep -Seconds 1
 }
 if (-not $ok) { throw "Service started but $url did not answer. Check the logs in $ServiceDir\logs." }

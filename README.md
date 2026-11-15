@@ -107,6 +107,35 @@ For Claude Desktop, which launches stdio servers, bridge to the HTTP endpoint wi
 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
 `{"command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8765/mcp"]}`.
 
+## Remote access (Claude mobile and other computers)
+
+Claude's custom connectors (web, desktop and mobile) connect from Anthropic's cloud, so the server
+needs a public HTTPS URL and a login. media-mcp has a built-in single-user OAuth login for this.
+
+1. **Choose a password and hash it:** `uv run media-mcp hash-password`, then copy the printed
+   `MEDIA_MCP_PASSWORD_HASH=...` line into `.env`.
+2. **Put a tunnel in front of `127.0.0.1:8765`.** That way no router ports are opened. Either:
+   - [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+     if you have a domain on Cloudflare: route a hostname to `http://127.0.0.1:8765`.
+   - [Tailscale Funnel](https://tailscale.com/kb/1223/funnel): `tailscale funnel --bg 8765`.
+3. **Set `MEDIA_MCP_PUBLIC_URL`** in `.env` to the tunnel's HTTPS URL (no trailing path), then restart
+   the server (re-run the service installer on Windows).
+4. **In Claude** › Settings › Connectors › *Add custom connector*, enter `<MEDIA_MCP_PUBLIC_URL>/mcp`.
+   Claude opens the media-mcp sign-in page; enter your password. The connector then works on
+   every device signed in to your Claude account.
+
+How the login is protected:
+- Only Claude's redirect hosts (plus localhost, for Claude Code) can register as clients.
+  Change this with `MEDIA_MCP_ALLOWED_REDIRECT_HOSTS`.
+- Access tokens last 1 hour. Refresh tokens last 30 days and change on every use. Only hashes
+  of tokens are stored, in `MEDIA_MCP_STATE_FILE`.
+- After 5 wrong passwords, the login is locked for 15 minutes.
+- Delete the state file and restart to sign out every client.
+- Consider `MEDIA_MCP_READ_ONLY=true` if you only need status from your phone.
+
+The server refuses to listen on a non-loopback address without this login, unless you set
+`MEDIA_MCP_ALLOW_UNAUTHENTICATED=true`.
+
 ## Tools
 
 Call `media_services` to see which groups are active.

@@ -27,3 +27,5 @@ Thumbs.db
 service/
 .python/
 .tools/
+.media-mcp-auth.json
+*.tmp
