@@ -48,7 +48,8 @@ cp .env.example .env
 | `MEDIA_MCP_READ_ONLY` | `false` | `true` hides every tool that changes something |
 | `MEDIA_MCP_TIMEOUT` | `30` | HTTP timeout in seconds |
 | `MEDIA_MCP_TRANSPORT` | `stdio` | `stdio` or `streamable-http` |
-| `MEDIA_MCP_HOST` / `MEDIA_MCP_PORT` | `127.0.0.1` / `8765` | only for `streamable-http` |
+| `MEDIA_MCP_HOST` / `MEDIA_MCP_PORT` | `127.0.0.1` / `8765` | only for `streamable-http`; `0.0.0.0` for LAN access |
+| `MEDIA_MCP_BEARER_TOKEN` | | required for LAN access; `uv run media-mcp new-token` |
 | `MEDIA_MCP_ENV_FILE` | `./.env` | path to an alternative env file |
 
 A service with no API key is simply disabled. Variables already set in the environment win over `.env`.
@@ -106,6 +107,41 @@ claude mcp add --transport http media http://127.0.0.1:8765/mcp
 For Claude Desktop, which launches stdio servers, bridge to the HTTP endpoint with
 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
 `{"command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8765/mcp"]}`.
+
+## Use from other computers on your network
+
+The server can be shared with other devices on your home network. It isn't reachable from the internet.
+
+1. Generate a token: `uv run media-mcp new-token`. Put the printed line in `.env`, along with
+   `MEDIA_MCP_HOST=0.0.0.0`.
+2. Re-run the Windows service installer. It adds a firewall rule that allows the port only from
+   your local subnet, and only on networks marked Private or Domain. Without a token, the server
+   refuses to listen beyond localhost.
+3. On the other computer, install [Node.js](https://nodejs.org) and add this to Claude Desktop's
+   `claude_desktop_config.json` (Settings › Developer › Edit Config). Replace `MEDIA-PC` with the
+   server's name or IP address:
+
+   ```json
+   {
+     "mcpServers": {
+       "media": {
+         "command": "npx",
+         "args": ["-y", "mcp-remote@0.15.2", "http://MEDIA-PC:8765/mcp",
+                  "--allow-http", "--header", "Authorization:${AUTH_HEADER}"],
+         "env": { "AUTH_HEADER": "Bearer <your MEDIA_MCP_BEARER_TOKEN>" }
+       }
+     }
+   }
+   ```
+
+   Claude Code on another computer can connect with
+   `claude mcp add --transport http media http://MEDIA-PC:8765/mcp --header "Authorization: Bearer <token>"`.
+
+Traffic on the LAN is plain HTTP. Anyone on your network who can capture traffic could read the
+token, so only do this on a network you trust.
+
+Claude on mobile and claude.ai custom connectors connect from Anthropic's cloud, not from your
+device, so they can't reach a server that is only on your LAN.
 
 ## Tools
 

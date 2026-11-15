@@ -21,4 +21,5 @@ if (Test-Path $WrapperExe) {
     Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
     sc.exe delete $ServiceName
 }
+Get-NetFirewallRule -DisplayName "media-mcp (LAN*" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 Write-Host "Removed service '$ServiceName'." -ForegroundColor Green

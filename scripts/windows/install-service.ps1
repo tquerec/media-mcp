@@ -86,6 +86,11 @@ Get-Content $EnvFile | ForEach-Object {
 $BindHost = if ($envValues["MEDIA_MCP_HOST"]) { $envValues["MEDIA_MCP_HOST"] } else { "127.0.0.1" }
 $Port     = if ($envValues["MEDIA_MCP_PORT"]) { [int]$envValues["MEDIA_MCP_PORT"] } else { 8765 }
 $CheckHost = if ($BindHost -eq "0.0.0.0") { "127.0.0.1" } else { $BindHost }
+$Token     = $envValues["MEDIA_MCP_BEARER_TOKEN"]
+$IsLan     = $BindHost -notin @("127.0.0.1", "localhost", "::1")
+if ($IsLan -and -not $Token) {
+    throw "MEDIA_MCP_HOST is $BindHost but MEDIA_MCP_BEARER_TOKEN is empty. Generate one with 'uv run media-mcp new-token' and add it to .env."
+}
 
 # --- Stop an existing install so files are not locked ----------------------
 if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
@@ -155,6 +160,20 @@ if (-not $SkipEnvPermissions) {
     icacls $EnvFile /inheritance:r /grant:r "*S-1-5-18:(F)" "*S-1-5-32-544:(F)" "$($env:USERDOMAIN)\$($env:USERNAME):(F)" | Out-Null
 }
 
+# --- Firewall: LAN access only from the local subnet ----------------------
+$RuleName = "media-mcp (LAN, TCP $Port)"
+Get-NetFirewallRule -DisplayName "media-mcp (LAN*" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+if ($IsLan) {
+    Step "Allowing TCP $Port from the local subnet only (Private/Domain networks)"
+    New-NetFirewallRule -DisplayName $RuleName -Direction Inbound -Action Allow -Protocol TCP `
+        -LocalPort $Port -RemoteAddress LocalSubnet -Profile Private, Domain | Out-Null
+    $public = Get-NetConnectionProfile | Where-Object NetworkCategory -eq "Public"
+    if ($public) {
+        Write-Warning ("Network '" + ($public.Name -join "', '") + "' is set to Public, so the LAN rule won't apply there. " +
+            "If this is your home network: Set-NetConnectionProfile -InterfaceAlias '<name>' -NetworkCategory Private")
+    }
+}
+
 # --- Install and start ----------------------------------------------------
 Step "Installing and starting the $ServiceName service"
 & $WrapperExe install
@@ -166,11 +185,13 @@ if ($LASTEXITCODE -ne 0) { throw "WinSW start failed; see $ServiceDir\logs" }
 $url = "http://${CheckHost}:$Port/mcp"
 Step "Checking $url"
 $body = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install-check","version":"1"}}}'
+$headers = @{ Accept = "application/json, text/event-stream" }
+if ($Token) { $headers["Authorization"] = "Bearer $Token" }
 $ok = $false
 foreach ($i in 1..20) {
     try {
         $r = Invoke-WebRequest -Uri $url -Method Post -Body $body -UseBasicParsing -TimeoutSec 5 `
-            -ContentType "application/json" -Headers @{ Accept = "application/json, text/event-stream" }
+            -ContentType "application/json" -Headers $headers
         if ($r.Content -match '"serverInfo"') { $ok = $true; break }
     } catch { }
     Start-Sleep -Seconds 1
